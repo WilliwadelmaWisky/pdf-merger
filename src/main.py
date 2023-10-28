@@ -1,18 +1,14 @@
-import customtkinter as ctk
-from customtkinter import filedialog
-from pypdf import PdfMerger
+from customtkinter import set_appearance_mode, set_default_color_theme, filedialog
+from pypdf import PdfMerger, PdfReader
+from pathlib import Path
+from src.component.MainWindow import MainWindow
 
-ctk.set_appearance_mode('dark')
-ctk.set_default_color_theme('dark-blue')
+set_appearance_mode('dark')
+set_default_color_theme('dark-blue')
 
 file_list = []
 file_types = [('PDF files', '*.pdf')]
 default_extension = '*.pdf'
-
-window = ctk.CTk()
-window.title('PDF merger')
-window.geometry('400x500')
-window.resizable(False, False)
 
 
 def import_file() -> None:
@@ -21,7 +17,15 @@ def import_file() -> None:
         return
 
     print('Import ', file_path)
-    add_file(file_path)
+    with open(file_path, 'rb') as file:
+        reader = PdfReader(file)
+        pages = len(reader.pages)
+
+    if pages <= 0:
+        return
+
+    print('Pages ', pages)
+    add_file(file_path, pages)
 
 
 def merge_files() -> None:
@@ -36,54 +40,34 @@ def merge_files() -> None:
     print('Export ', file_path)
     merger = PdfMerger()
 
-    for file in file_list:
-        merger.append(file)
+    for i in range(0, len(file_list)):
+        pages = window.get_file(i).get_pages()
+        if pages[0] >= pages[1]:
+            print('Failed to append: ', file_list[i])
+            continue
+
+        merger.append(file_list[i], pages=pages)
 
     merger.write(file_path)
     merger.close()
     clear_files()
 
 
-import_button = ctk.CTkButton(window, text='Import', width=250, height=40, command=import_file)
-import_button.pack(pady=10)
-frame = ctk.CTkFrame(window)
-frame.pack(padx=10, fill='both', expand=1)
-
-merge_button = ctk.CTkButton(window, text='Merge', width=250, height=40, command=merge_files)
-merge_button.pack(pady=10)
-
-
-def add_label(text: str) -> None:
-    entry_frame = ctk.CTkFrame(frame)
-    entry_frame.pack(padx=5, pady=2, fill='x')
-
-    name_label = ctk.CTkLabel(entry_frame, text=text, wraplength=300, justify='left', anchor='w')
-    name_label.pack(padx=10, pady=5, side='left', fill='x', expand=1)
-
-    remove_button = ctk.CTkButton(entry_frame, text='-', width=40, command=lambda: remove_entry(entry_frame))
-    remove_button.pack(padx=5, side='left')
-
-
-def remove_entry(entry) -> None:
-    index = frame.winfo_children().index(entry)
-    remove_file(index)
-
-
-def add_file(file_path: str):
+def add_file(file_path: str, pages: int):
     file_list.append(file_path)
-    add_label(file_path)
+    file_name = Path(file_path).name
+    window.add_file(file_name, pages)
 
 
 def remove_file(index: int) -> None:
     file_list.pop(index)
-    child = frame.winfo_children().pop(index)
-    child.destroy()
+    window.remove_file(index)
 
 
-def clear_files():
+def clear_files() -> None:
     file_list.clear()
-    for child in frame.winfo_children():
-        child.destroy()
+    window.clear_files()
 
 
+window = MainWindow(on_import=import_file, on_merge=merge_files, on_clear=clear_files, on_remove_entry=remove_file)
 window.mainloop()
